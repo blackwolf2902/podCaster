@@ -26,7 +26,7 @@ def getInput() -> list:
 def podCaster():
     user_input = getInput()
     
-    pCaster = genai.GenerativeModel("gemini-2.5-flash") # type: ignore
+    pCaster = genai.GenerativeModel("gemini-2.5-flash")
     
     chat = pCaster.start_chat()
     
