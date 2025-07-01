@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'asker.css' %}">
+  <title>PodCaster</title>
+</head>
+<body>
+
+<div id="asker">
+  {% if chat_mode %}
+    <!-- Chat Interface -->
+    <section id="chatbox">
+      <h3>🎙️ Podcast: {{ title }}</h3>
+      <div class="chat-history">
+        {% for speaker, msg in conversation %}
+          <div class="chat-line {{ speaker|lower }}">
+            <strong>{{ speaker }}:</strong>
+            <p>{{ msg|safe }}</p>
+          </div>
+        {% endfor %}
+      </div>
+
+      <form method="POST" class="chat-form">
+        {% csrf_token %}
+        <input type="text" name="user_message" placeholder="Ask a follow-up..." autocomplete="off" required />
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+  {% else %}
+    <!-- Initial Title + Topics Form -->
+    <section id="initial">
+      <form action="" method="POST">
+        {% csrf_token %}
+        <input
+          type="text"
+          name="title"
+          placeholder="Title you want to talk about in a Podcast..."
+          value="{{ title }}"
+          required
+        />
+        <br />
+        <label>Topics:</label><br />
+        <div id="topics-container">
+          {% for topic in topics %}
+            <div class="topic-block">
+              <input type="text" name="topics" value="{{ topic }}" required />
+              <button type="button" class="remove-topic">−</button>
+            </div>
+          {% endfor %}
+        </div>
+        <br />
+        <button type="submit" name="add_topic">+ Add Another Topic</button>
+        <button type="submit" name="submit">Submit</button>
+        <button type="button" id="reset-form">Reset</button>
+      </form>
+    </section>
+  {% endif %}
+</div>
+
+<!-- JS to handle dynamic topic fields -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("topics-container");
+  const resetBtn = document.getElementById("reset-form");
+
+  // Remove topic
+  if (container) {
+    container.addEventListener("click", (e) => {
+      if (e.target.classList.contains("remove-topic")) {
+        e.target.closest(".topic-block").remove();
+      }
+    });
+  }
+
+  // Reset form
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      document.querySelector("input[name='title']").value = "";
+      container.innerHTML = '';
+      const div = document.createElement("div");
+      div.classList.add("topic-block");
+      div.innerHTML = `<input type="text" name="topics" value="" required /><button type="button" class="remove-topic">−</button>`;
+      container.appendChild(div);
+    });
+  }
+});
+</script>
+
+</body>
+</html>
