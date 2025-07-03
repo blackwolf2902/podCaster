@@ -15,9 +15,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
 from mainApp import views
 
 urlpatterns = [    
     path('',views.initial), #type:ignore
-    path('chat/',views.mainChatter,name="mainChatter")
-]
+    path('chat/',views.mainChatter,name="mainChatter"),
+    path('generate_podcast/', views.generate_podcast, name="generate_podcast"),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

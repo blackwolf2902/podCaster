@@ -1,94 +1,868 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  {% load static %}
-  <link rel="stylesheet" href="{% static 'asker.css' %}">
-  <title>PodCaster</title>
-</head>
-<body>
-
-<div id="asker">
-  {% if chat_mode %}
-    <!-- Chat Interface -->
-    <section id="chatbox">
-      <h3>🎙️ Podcast: {{ title }}</h3>
-      <div class="chat-history">
-        {% for speaker, msg in conversation %}
-          <div class="chat-line {{ speaker|lower }}">
-            <strong>{{ speaker }}:</strong>
-            <p>{{ msg|safe }}</p>
-          </div>
-        {% endfor %}
-      </div>
-
-      <form method="POST" class="chat-form">
-        {% csrf_token %}
-        <input type="text" name="user_message" placeholder="Ask a follow-up..." autocomplete="off" required />
-        <button type="submit">Send</button>
-      </form>
-    </section>
-
-  {% else %}
-    <!-- Initial Title + Topics Form -->
-    <section id="initial">
-      <form action="" method="POST">
-        {% csrf_token %}
-        <input
-          type="text"
-          name="title"
-          placeholder="Title you want to talk about in a Podcast..."
-          value="{{ title }}"
-          required
-        />
-        <br />
-        <label>Topics:</label><br />
-        <div id="topics-container">
-          {% for topic in topics %}
-            <div class="topic-block">
-              <input type="text" name="topics" value="{{ topic }}" required />
-              <button type="button" class="remove-topic">−</button>
-            </div>
-          {% endfor %}
-        </div>
-        <br />
-        <button type="submit" name="add_topic">+ Add Another Topic</button>
-        <button type="submit" name="submit">Submit</button>
-        <button type="button" id="reset-form">Reset</button>
-      </form>
-    </section>
-  {% endif %}
-</div>
-
-<!-- JS to handle dynamic topic fields -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const container = document.getElementById("topics-container");
-  const resetBtn = document.getElementById("reset-form");
-
-  // Remove topic
-  if (container) {
-    container.addEventListener("click", (e) => {
-      if (e.target.classList.contains("remove-topic")) {
-        e.target.closest(".topic-block").remove();
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    {% load static %}
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>PodCaster</title>
+    <style>
+      :root {
+        --primary-color: #4361ee;
+        --secondary-color: #3f37c9;
+        --success-color: #38b000;
+        --light-color: #f8f9fa;
+        --dark-color: #212529;
+        --border-radius: 18px;
+        --box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        --transition: all 0.3s ease;
+        --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
       }
-    });
-  }
 
-  // Reset form
-  if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      document.querySelector("input[name='title']").value = "";
-      container.innerHTML = '';
-      const div = document.createElement("div");
-      div.classList.add("topic-block");
-      div.innerHTML = `<input type="text" name="topics" value="" required /><button type="button" class="remove-topic">−</button>`;
-      container.appendChild(div);
+      * {
+        font-family: "Poppins", "Segoe UI", sans-serif;
+      }
+
+      body {
+        background: var(--bg-gradient);
+        color: var(--dark-color);
+        min-height: 100vh;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      .header {
+        background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 10px 0;
+        border-radius: 0 0 var(--border-radius) var(--border-radius);
+        box-shadow: var(--box-shadow);
+        z-index: 100;
+      }
+
+      #asker {
+        width: 100vw;
+        max-width: 720px;
+        min-height: 650px;
+        margin: 32px auto;
+        position: relative;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+      }
+
+      #chatbox {
+        background: white;
+        padding: 32px 28px;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        min-height: 540px;
+        max-width: 680px;
+        margin: 0 auto;
+      }
+
+      #chat-app {
+        overflow-y: auto;
+        height: 400px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #start-chat {
+        background-color: rgba(67, 97, 238, 0.1);
+        border-radius: var(--border-radius);
+        padding: 12px 15px;
+        margin-bottom: 15px;
+      }
+
+      .chat-history {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 0;
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary-color) #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .chat-history::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .chat-history::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+
+      .chat-history::-webkit-scrollbar-thumb {
+        background: var(--primary-color);
+        border-radius: 10px;
+      }
+
+      .chat-line {
+        padding: 10px 15px;
+        border-radius: var(--border-radius);
+        max-width: 85%;
+        position: relative;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        animation: fadeIn 0.4s ease-in;
+      }
+
+      .chat-line.you {
+        background: linear-gradient(135deg, #2d9cda 0%, #186a9e 100%);
+        color: white;
+        align-self: flex-end;
+        border-bottom-right-radius: 5px;
+      }
+
+      .chat-line.bot {
+        background-color: #f0f2f5;
+        color: var(--dark-color);
+        align-self: flex-start;
+        border-bottom-left-radius: 5px;
+      }
+
+      .chat-line strong {
+        font-weight: 600;
+        color: inherit;
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      .chat-line p {
+        margin: 0;
+      }
+
+      .chat-form {
+        background: white;
+        padding: 15px 0 0 0;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        margin-top: 15px;
+      }
+
+      #initial-form {
+        padding: 20px;
+        background-color: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+      }
+
+      .form-title {
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 5px;
+        font-size: 18px;
+      }
+
+      .form-subtitle {
+        font-size: 14px;
+        color: #6c757d;
+        margin-bottom: 15px;
+      }
+
+      .topic-block {
+        position: relative;
+        background: rgba(67, 97, 238, 0.05);
+        padding: 15px;
+        border-radius: 16px;
+        margin-bottom: 10px;
+        transition: var(--transition);
+      }
+
+      .topic-block input {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px dashed #ccc;
+        border-radius: 0;
+        font-size: 16px;
+        width: 100%;
+        padding: 8px 0;
+        outline: none;
+        color: var(--dark-color);
+        margin-bottom: 5px;
+        transition: var(--transition);
+      }
+
+      .topic-block input:focus {
+        border-bottom: 2px solid var(--primary-color);
+        box-shadow: 0 0 0 1px rgba(67, 97, 238, 0.3);
+        color: var(--primary-color);
+      }
+
+      .remove-topic {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(238, 23, 23, 0.8);
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        cursor: pointer;
+        transition: var(--transition);
+        border: none;
+      }
+
+      .remove-topic:hover {
+        transform: scale(1.1);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        border: none;
+        box-shadow: 0 4px 10px rgba(67, 97, 238, 0.3);
+        transition: var(--transition);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(67, 97, 238, 0.4);
+      }
+
+      .btn-primary:focus {
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.3);
+      }
+
+      .btn-light {
+        background-color: rgba(67, 97, 238, 0.1);
+        border: 1px solid var(--primary-color);
+        color: var(--primary-color);
+        transition: var(--transition);
+      }
+
+      .btn-light:hover {
+        background-color: rgba(67, 97, 238, 0.2);
+      }
+
+      #podcast-title {
+        font-weight: 700;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .podcast-thumbnail {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+
+      .topic-counter {
+        background-color: #e9ecef;
+        padding: 4px 10px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #495057;
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+      }
+
+      .submit-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 15px;
+      }
+
+      .podcast-hint {
+        font-size: 14px;
+        color: #6c757d;
+        margin-top: 5px;
+      }
+
+      .add-topic-btn {
+        background: rgba(67, 97, 238, 0.1);
+        border: 2px dashed var(--primary-color);
+        color: var(--primary-color);
+        padding: 15px;
+        border-radius: 16px;
+        text-align: center;
+        cursor: pointer;
+        transition: var(--transition);
+        margin-bottom: 10px;
+      }
+
+      .add-topic-btn:hover {
+        background: rgba(67, 97, 238, 0.2);
+      }
+
+      #suggestion-zone {
+        margin-top: 20px;
+      }
+
+      .suggestion-item {
+        cursor: pointer;
+        transition: var(--transition);
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 5px;
+      }
+
+      .suggestion-item:hover {
+        background-color: rgba(67, 97, 238, 0.1);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 768px) {
+        #asker {
+          width: 100%;
+          margin: 10px;
+          border-radius: var(--border-radius);
+        }
+
+        #chatbox {
+          border-radius: var(--border-radius);
+        }
+
+        #podcast-title {
+          font-size: 20px;
+        }
+
+        .podcast-thumbnail {
+          font-size: 16px;
+          width: 36px;
+          height: 36px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .chat-line {
+          max-width: 90%;
+        }
+
+        .btn {
+          padding: 8px 12px;
+        }
+      }
+
+      .signature {
+        font-size: 12px;
+        font-style: italic;
+        color: #6c757d;
+        text-align: center;
+        margin-top: 30px;
+        padding: 15px;
+        border-top: 1px solid #e9ecef;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header mb-4">
+      <div class="container">
+        <div class="d-flex align-items-center justify-content-between">
+          <h1 class="h5 mb-0"><i class="fas fa-microphone-alt me-2"></i>PodCaster</h1>
+          <div class="d-flex align-items-center gap-3">
+            <div class="btn-group btn-group-sm">
+              <button type="button" class="btn btn-light" title="New Podcast" onclick="window.location.href='/'">
+                <i class="fas fa-plus"></i>
+              </button>
+              <button type="button" class="btn btn-light" title="Save Conversation">
+                <i class="fas fa-save"></i>
+              </button>
+            </div>
+            {% if chat_mode %}
+            <button class="btn btn-primary" id="transform-podcast-btn" title="Transform to Podcast">
+              <i class="fas fa-magic me-1"></i> Transform to Podcast
+            </button>
+            {% endif %}
+            <button class="btn btn-light" title="Settings"><i class="fas fa-cog"></i></button>
+</script>
+<script>
+// Podcast transformation button handler
+document.addEventListener("DOMContentLoaded", function() {
+  const transformBtn = document.getElementById('transform-podcast-btn');
+  if (transformBtn) {
+    transformBtn.addEventListener('click', function() {
+      // POST to /generate_podcast/ (to be implemented in Django)
+      fetch('/generate_podcast/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.audio_url) {
+          window.open(data.audio_url, '_blank');
+        } else if (data && data.error) {
+          alert('Error: ' + data.error);
+        } else {
+          alert('Podcast generation started or failed.');
+        }
+      })
+      .catch(() => alert('Podcast generation failed.'));
     });
   }
 });
 </script>
+          </div>
+        </div>
+      </div>
+    </div>
 
-</body>
+    <div id="asker">
+      {% if chat_mode %}
+      <!-- Podcast Chat Interface -->
+      <section id="chatbox" class="mb-3">
+        <div id="chat-header" class="d-flex align-items-center mb-3">
+          <div class="podcast-thumbnail">{{ title|first|upper }}</div>
+          <div>
+            <h3 id="podcast-title" class="mb-0">
+              <span id="podcast-name">{{ title }}</span>
+            </h3>
+            <div class="small text-muted">Active Conversation</div>
+          </div>
+        </div>
+
+        <div id="chat-app">
+          <div id="start-chat" class="system-message">
+            <i class="fas fa-microphone-alt me-2"></i> Hey there! What would you like to discuss
+            about {{ title }}?
+          </div>
+
+          <div id="chat-history-container" class="chat-history">
+            {% for speaker, msg in conversation %}
+            <div class="chat-line {% if speaker == 'You' %}you{% else %}bot{% endif %}">
+              <strong>{{ speaker }}:</strong>
+              <p>{{ msg|safe }}</p>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="chat-form">
+            <form id="chat-form" method="POST">
+              {% csrf_token %}
+              <div class="input-group">
+                <input
+                  type="text"
+                  name="user_message"
+                  id="chat-input"
+                  class="form-control"
+                  autocomplete="off"
+                  required
+                  placeholder="Ask a follow-up question about {{ title }}..."
+                />
+                <button class="btn btn-primary" type="submit" id="send-btn">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="suggestion-zone" class="bg-light rounded-3 p-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Quick Ideas</h6>
+            <button id="refresh-ideas" class="btn btn-sm btn-link p-0" title="Refresh suggestions">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+          <div id="suggestion-list">
+            <div class="suggestion-item" data-suggestion="Tell me more about {{ title }}">
+              <i class="fas fa-play-circle me-2"></i> Tell me more about {{ title }}
+            </div>
+            <div
+              class="suggestion-item"
+              data-suggestion="What are the key points about {{ title }}?"
+            >
+              <i class="fas fa-play-circle me-2"></i> What are the key points about {{ title }}?
+            </div>
+            <div
+              class="suggestion-item"
+              data-suggestion="How does {{ title }} impact our daily lives?"
+            >
+              <i class="fas fa-play-circle me-2"></i> How does {{ title }} impact our daily lives?
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {% else %}
+      <!-- Initial Title + Topics Form -->
+      <section id="initial-form">
+        <div class="p-3">
+          <div class="form-title">Start a Podcast</div>
+          <div class="form-subtitle">Create your podcast topic and share ideas</div>
+
+          <form action="" method="POST" id="podcast-form">
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="podcast-title-input" class="form-label">Podcast Title</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-hashtag"></i></span>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="podcast-title-input"
+                  name="title"
+                  placeholder="Enter your podcast topic..."
+                  required
+                />
+              </div>
+            </div>
+
+            <label class="form-label">Topics</label>
+            <p class="podcast-hint mt-0">
+              Add key points you want to cover in your podcast conversation
+            </p>
+
+            <div id="topics-container" class="my-3">
+              {% if topics %} {% for topic in topics %}
+              <div class="topic-block">
+                <input
+                  type="text"
+                  name="topics"
+                  class="form-control topic-input"
+                  value="{{ topic }}"
+                  required
+                />
+                <button type="button" class="remove-topic">
+                  <i class="fas fa-times"></i>
+                </button>
+                <div class="topic-counter">Topic {{ forloop.counter }}</div>
+              </div>
+              {% endfor %} {% else %}
+              <div class="topic-block">
+                <input
+                  type="text"
+                  name="topics"
+                  class="form-control topic-input"
+                  placeholder="Enter a topic to discuss..."
+                  required
+                />
+                <button type="button" class="remove-topic">
+                  <i class="fas fa-times"></i>
+                </button>
+                <div class="topic-counter">Topic 1</div>
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="add-topic-btn" id="add-topic-btn">
+              <i class="fas fa-plus me-2"></i> Add Another Topic
+            </div>
+
+            <div class="text-center">
+              <button type="submit" name="submit" class="btn btn-primary submit-btn">
+                <i class="fas fa-play me-2"></i> Start Podcast Conversation
+              </button>
+              <button type="button" id="reset-form" class="btn btn-light submit-btn ms-2">
+                <i class="fas fa-undo me-2"></i> Reset
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+      {% endif %}
+
+      <div class="signature">
+        <p>
+          <i class="fas fa-microphone-alt me-2"></i>Created with PodCaster • Make your virtual
+          podcast come alive
+        </p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Get elements
+        const chatForm = document.getElementById("chat-form");
+        const chatInput = document.getElementById("chat-input");
+        const chatHistory = document.getElementById("chat-history-container");
+        const sendBtn = document.getElementById("send-btn");
+        const topicsContainer = document.getElementById("topics-container");
+        const addTopicBtn = document.getElementById("add-topic-btn");
+        const resetBtn = document.getElementById("reset-form");
+        const refreshIdeas = document.getElementById("refresh-ideas");
+        const suggestionList = document.getElementById("suggestion-list");
+        const podcastForm = document.getElementById("podcast-form");
+
+        // Chat mode functionality
+        if (chatForm && chatInput) {
+          // Auto-focus on chat input
+          chatInput.focus();
+
+          // Auto-scroll to bottom
+          if (chatHistory) {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+          }
+
+          // Keyboard UX: Enter submits, Shift+Enter for newline
+          chatInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              chatForm.requestSubmit();
+            }
+          });
+
+          // Handle chat form submission
+          chatForm.addEventListener("submit", function (e) {
+            // Optionally show loading spinner on sendBtn
+            if (sendBtn) {
+              sendBtn.disabled = true;
+              sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            }
+            setTimeout(() => {
+              if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+              }
+              chatInput.focus();
+            }, 1200); // Simulate response delay
+          });
+
+          // Handle suggestion clicks (keyboard accessible)
+          if (suggestionList) {
+            suggestionList.addEventListener("click", function (e) {
+              const suggestionItem = e.target.closest(".suggestion-item");
+              if (suggestionItem) {
+                const suggestion = suggestionItem.getAttribute("data-suggestion");
+                chatInput.value = suggestion;
+                chatInput.focus();
+              }
+            });
+            // Keyboard accessibility
+            suggestionList.querySelectorAll(".suggestion-item").forEach((item) => {
+              item.setAttribute("tabindex", "0");
+              item.setAttribute("role", "button");
+              item.setAttribute("aria-label", item.textContent.trim());
+              item.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  chatInput.value = item.getAttribute("data-suggestion");
+                  chatInput.focus();
+                }
+              });
+            });
+          }
+
+          // Refresh suggestions
+          if (refreshIdeas) {
+            refreshIdeas.addEventListener("click", function () {
+              updateSuggestions();
+              // Re-apply keyboard accessibility
+              setTimeout(() => {
+                suggestionList.querySelectorAll(".suggestion-item").forEach((item) => {
+                  item.setAttribute("tabindex", "0");
+                  item.setAttribute("role", "button");
+                  item.setAttribute("aria-label", item.textContent.trim());
+                  item.addEventListener("keydown", function (e) {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      chatInput.value = item.getAttribute("data-suggestion");
+                      chatInput.focus();
+                    }
+                  });
+                });
+              }, 100);
+            });
+          }
+        }
+
+        // Form mode functionality
+        if (topicsContainer) {
+          // Add topic functionality
+          if (addTopicBtn) {
+            addTopicBtn.addEventListener("click", function () {
+              addNewTopic();
+              updateTopicCounters();
+            });
+          }
+
+          // Remove topic functionality
+          topicsContainer.addEventListener("click", function (e) {
+            if (e.target.closest(".remove-topic")) {
+              const topicBlock = e.target.closest(".topic-block");
+              const topicBlocks = topicsContainer.querySelectorAll(".topic-block");
+              if (topicBlocks.length > 1) {
+                topicBlock.remove();
+                updateTopicCounters();
+              } else {
+                // Don't remove if it's the only topic, just clear it
+                const input = topicBlock.querySelector(".topic-input");
+                input.value = "";
+                input.focus();
+              }
+            }
+          });
+
+          // Reset form
+          if (resetBtn) {
+            resetBtn.addEventListener("click", function () {
+              resetForm();
+              updateTopicCounters();
+            });
+          }
+
+          // Form validation
+          if (podcastForm) {
+            podcastForm.addEventListener("submit", function (e) {
+              const titleInput = document.getElementById("podcast-title-input");
+              const topicInputs = topicsContainer.querySelectorAll(".topic-input");
+
+              if (!titleInput.value.trim()) {
+                e.preventDefault();
+                titleInput.focus();
+                alert("Please enter a podcast title");
+                return;
+              }
+
+              let hasValidTopic = false;
+              topicInputs.forEach((input) => {
+                if (input.value.trim()) {
+                  hasValidTopic = true;
+                }
+              });
+
+              if (!hasValidTopic) {
+                e.preventDefault();
+                topicInputs[0].focus();
+                alert("Please add at least one topic");
+                return;
+              }
+
+              // Prevent submitting empty topic fields
+              topicInputs.forEach((input) => {
+                if (!input.value.trim()) {
+                  input.disabled = true;
+                }
+              });
+              setTimeout(() => {
+                topicInputs.forEach((input) => {
+                  input.disabled = false;
+                });
+              }, 1000);
+            });
+          }
+        }
+
+        // Helper functions
+        function addChatMessage(sender, message, className) {
+          const messageDiv = document.createElement("div");
+          messageDiv.className = `chat-line ${className}`;
+          messageDiv.innerHTML = `
+            <strong>${sender}:</strong>
+            <p>${message}</p>
+        `;
+
+          chatHistory.appendChild(messageDiv);
+          chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function addNewTopic() {
+          const topicCount = topicsContainer.querySelectorAll(".topic-block").length + 1;
+          const newTopicBlock = document.createElement("div");
+          newTopicBlock.className = "topic-block";
+          newTopicBlock.innerHTML = `
+            <input type="text" name="topics" class="form-control topic-input" placeholder="Enter a topic to discuss..." required />
+            <button type="button" class="remove-topic">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="topic-counter">Topic ${topicCount}</div>
+        `;
+
+          topicsContainer.appendChild(newTopicBlock);
+
+          // Focus on new input
+          const newInput = newTopicBlock.querySelector(".topic-input");
+          newInput.focus();
+        }
+
+        function updateTopicCounters() {
+          const topicBlocks = topicsContainer.querySelectorAll(".topic-block");
+          topicBlocks.forEach((block, index) => {
+            const counter = block.querySelector(".topic-counter");
+            counter.textContent = `Topic ${index + 1}`;
+          });
+        }
+
+        function resetForm() {
+          // Clear title input
+          const titleInput = document.getElementById("podcast-title-input");
+          if (titleInput) titleInput.value = "";
+
+          // Reset topics to just one empty topic
+          topicsContainer.innerHTML = `
+            <div class="topic-block">
+                <input type="text" name="topics" class="form-control topic-input" placeholder="Enter a topic to discuss..." required />
+                <button type="button" class="remove-topic">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="topic-counter">Topic 1</div>
+            </div>
+        `;
+
+          // Focus on title input
+          if (titleInput) titleInput.focus();
+        }
+
+        function updateSuggestions() {
+          const suggestions = [
+            "What are the main benefits of this topic?",
+            "Can you explain this in simple terms?",
+            "What are some real-world examples?",
+            "How does this compare to similar topics?",
+            "What should beginners know about this?",
+            "What are the latest developments in this area?",
+          ];
+
+          // Shuffle suggestions
+          const shuffled = suggestions.sort(() => 0.5 - Math.random());
+          const selected = shuffled.slice(0, 3);
+
+          suggestionList.innerHTML = "";
+          selected.forEach((suggestion) => {
+            const suggestionDiv = document.createElement("div");
+            suggestionDiv.className = "suggestion-item";
+            suggestionDiv.setAttribute("data-suggestion", suggestion);
+            suggestionDiv.innerHTML = `<i class="fas fa-play-circle me-2"></i> ${suggestion}`;
+            suggestionList.appendChild(suggestionDiv);
+          });
+        }
+      });
+    </script>
+  </body>
 </html>
